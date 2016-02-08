@@ -1,0 +1,24 @@
+{
+  "name": "de-wiktionary",
+  "version": "0.0.2",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rostu/de-wiktionary.git"
+  },
+  "author": "Robert Studtrucker",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/Rostu/de-wiktionary/issues"
+  },
+  "homepage": "https://github.com/Rostu/de-wiktionary#readme",
+  "dependencies": {
+    "cheerio": "^0.20.0",
+    "deferred": "^0.7.5",
+    "request": "^2.69.0"
+  }
+}
