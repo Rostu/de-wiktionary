@@ -2,64 +2,125 @@ var deferred = require('deferred');
 var request = require('request');
 var cheerio = require('cheerio');
 
-var api = 'https://de.wiktionary.org/w/api.php?format=json&utf8&action=query&prop=extracts&rvprop=content&titles=';
+var wiktionaryapi = 'https://de.wiktionary.org/w/api.php?format=json&utf8&action=query&prop=extracts&export&titles=';
+//var api = 'https://de.wiktionary.org/w/api.php?action=query&prop=pageimages&format=json&piprop=original&titles=';
+var imageapi = 'https://commons.wikimedia.org/w/api.php?action=query&prop=imageinfo&format=json&iiprop=url&iiurlwidth=220&titles=File:'
+
+var wikiurl = 'https://de.wiktionary.org/wiki/';
 
 var Word = function () {
-    this.name = '';
+    this.wordclass = '';
     this.valid = true;
     this.explanations = [];
     this.examples = [];
+    this.etymologie = [];
     this.synonym = [];
     this.hyperonym = [];
-    this.imgurl = '';
+    this.imgname = null;
+    this.error = '';
 };
 
-function query(word) {
+function get_infos(searchterm, cb) {
     var def = deferred();
+   scrap_wiki(searchterm).done(function (data) {
+        var def = deferred();
+        var word = parse2(data);
 
-    if (!word) {
+       //after that we do a mediawiki API request to get the desired information on the sites first example image
+       queryimage(word.imgname).done(function(data){
+            word.imgname = data;
+            //console.log(word);
+            cb(null,word);
+        }, function (error) {
+            console.log(error);
+        });
+
+    }, function (error) {
+        console.log(error);
+    });
+}
+//sends a http request to the wikrionary api to get more informations about the pictures
+//gets a string for the correspnding mediawiki image name and returns a JSON object with informations
+function queryimage(imagename){
+    var def = deferred();
+    if (!imagename) {
         return def.reject('Invalid word.');
     }
-
     var options = {
-        url: api + word
+        url: imageapi + imagename
     };
 
     request(options, function (error, response, body) {
         if (!error && response.statusCode === 200) {
-            return def.resolve(body);
-        } else {
-            return def.reject('Request error.');
-        }
-    });
-
-    return def.promise;
-};
-
-function parse(data) {
-    var word = new Word();
-
-    try {
-        var json = JSON.parse(data);
-        var pages = json.query.pages;
-        if (pages['-1']) {
-            word.valid = false;
-        } else {
+            var json = JSON.parse(body);
+            var pages = json.query.pages;
             for (var key in pages) {
                 var page = pages[key];
-                var content = page.extract;
-                //console.log( content);
-                word.name = page.title;
-                word.valid = true;
+                var imageinfos = page.imageinfo;
+                //console.log(imageinfos[0]);
+                return def.resolve(imageinfos);
+                break;
+            }
 
-                var i = 0;
-                var length = 0;
+        } else {
+            return def.reject("Query error!");
+        }
+    });
+    return def.promise;
 
-                var $ = cheerio.load(content,{
-                    normalizeWhitespace: false,
-                    xmlMode: true,
-                    decodeEntities: true
-                });
+}
+
+//this function creates a http get request and returns the body of the answer if the status code is 200,304 or 404
+function scrap_wiki(word) {
+    var def = deferred();
+    if (!word) {
+        return def.reject('Invalid word.');
+    }
+    var options = {
+        url: wikiurl + word
+    };
+    request(options, function (error, response, body) {
+        if (!error && response.statusCode === 200 | 404 | 304) {
+            return def.resolve(body);
+        } else {
+            return def.reject("Query error!");
+        }
+    });
+    return def.promise;
+}
+
+
+function parse2(data) {
+    var word = new Word();
+    try {
+        var $ = cheerio.load(data,{
+            normalizeWhitespace: false,
+            xmlMode: true,
+            decodeEntities: true
+        });
+
+        //to get the pictures and some extra infos on them we have to go way around since not all desired informations can be found on the page that is scraped
+        //first thing is to get the name of the desired image
+        var image = $(".hintergrundfarbe2.rahmenfarbe1").find("a.image")[0];
+        var imagename = $(image).attr('href');
+        imagename = imagename.replace('/wiki/Datei:',"");
+        word.imgname = imagename;
+
+        if ($("#noarticletext").length > 0) {
+            word.valid = false;
+            word.error = "Kein Eintrag";
+        } else {
+                //Wortart
+                var $wordclass = $('a[title=\'Hilfe:Wortart\']').parent().text();
+                word.wordclass = $wordclass;
+
+                //Audio
+                var $explanationList = $('p[title=\'Sinn und Bezeichnetes (Semantik)\']').next().children();
+
+                for (i = 0, length = $explanationList.length; i < length; i++) {
+                    var explanation = $($explanationList[i]).text();
+                    word.explanations.push(explanation);
+                }
                 //Explantation
                 var $explanationList = $('p[title=\'Sinn und Bezeichnetes (Semantik)\']').next().children();
 
@@ -83,49 +144,37 @@ function parse(data) {
                     word.hyperonym.push(hyperonym);
                 }
 
+                //Etymologie
+                var $etymologie = $('p[title=\'Etymologie und Morphologie\']').next().children();
+                for (i = 0, length = $etymologie.length; i < length; i++) {
+                    var etymologie = $($etymologie[i]).text();
+                    word.etymologie.push(etymologie);
+                }
+
                 //Examples
                 var $exampleList = $('p[title=\'Verwendungsbeispielsätze\']').next().children();
                 for (i = 0, length = $exampleList.length; i < length; i++) {
                     var example = $($exampleList[i]).text();
-                    //var exampleobject = $($exampleList[i]);
-                    //var reference = $(exampleobject).children().length;
-                    // It may only contain index number like [3], [4a]
-                    if (!/^\s*\[\d{1,2}\w?\]\s*$/i.test(example)) {
-                        word.examples.push(example);
+                    var exampletoken = $($exampleList[i]);
+                    if($(exampletoken).children('.reference')&&!/^\s*\[\d{1,2}\w?\]\s*$/i.test(example)){
+                        var reference_id = $(exampletoken).children('.reference').children('a').attr('href');
+                        word.examples.push({text: example, referece:$("ol li"+reference_id).children('.reference-text').clone().html()});
+                        // It may only contain index number like [3], [4a]
+                    }else if (!/^\s*\[\d{1,2}\w?\]\s*$/i.test(example)) {
+                        word.examples.push({text: example, referece:"" });
                     }
                 }
-                break;
             }
-        }
+
     } catch (error) {
+        console.log(error);
         word.valid = false;
     }
     return word;
 };
 
-//var print = require('./lib/print.js');
-module.exports = {
-    get_infos:  function(word) {
-        query(word).done(function (data) {
-        var word = parse(data);
-        console.log(word);
-        }, function (message) {
-            console.log(message);
-        });
-    }
-
-};
-
-
 /*
-function get_infos(word) {
-    query(word).done(function (data) {
-        var word = parse(data);
-        console.log(word);
-    }, function (message) {
-        console.log(message);
-    });
-}
-
-get_infos("Esel");
+get_infos("Esel",function(err, dat){
+    console.log(dat);
+});
  */
