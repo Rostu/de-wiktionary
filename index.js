@@ -17,34 +17,39 @@ var Word = function () {
     this.synonym = [];
     this.hyperonym = [];
     this.imgname = null;
+    this.audio = [];
     this.error = '';
 };
 
 function get_infos(searchterm, cb) {
-    var def = deferred();
-   scrap_wiki(searchterm).done(function (data) {
-        var def = deferred();
+
+    scrap_wiki(searchterm).done(function (data) {
         var word = parse2(data);
 
-       //after that we do a mediawiki API request to get the desired information on the sites first example image
-       queryimage(word.imgname).done(function(data){
-            word.imgname = data;
-            //console.log(word);
-            cb(null,word);
-        }, function (error) {
-            console.log(error);
-        });
-
+        //after that we do a mediawiki API request to get the desired information on the sites first example image
+        if (word.imgname) {
+            queryimage(word.imgname).done(function (data) {
+                word.imgname = data;
+                //console.log(word);
+                cb(null, word);
+            }, function (error) {
+                console.log(error);
+            });
+        }else{
+            cb(null, word);
+        }
     }, function (error) {
         console.log(error);
     });
+
+
 }
 //sends a http request to the wikrionary api to get more informations about the pictures
 //gets a string for the correspnding mediawiki image name and returns a JSON object with informations
 function queryimage(imagename){
     var def = deferred();
     if (!imagename) {
-        return def.reject('Invalid word.');
+        return def.reject('No image');
     }
     var options = {
         url: imageapi + imagename
@@ -103,24 +108,34 @@ function parse2(data) {
         //first thing is to get the name of the desired image
         var image = $(".hintergrundfarbe2.rahmenfarbe1").find("a.image")[0];
         var imagename = $(image).attr('href');
-        imagename = imagename.replace('/wiki/Datei:',"");
-        word.imgname = imagename;
+        if(imagename){
+            imagename = imagename.replace('/wiki/Datei:',"");
+            word.imgname = imagename;
+        }
+
 
         if ($("#noarticletext").length > 0) {
             word.valid = false;
             word.error = "Kein Eintrag";
-        } else {
+        }else if($("span#Deklinierte_Form").length > 0){
+            console.log("Deklinierte Form");
+        }else {
                 //Wortart
                 var $wordclass = $('a[title=\'Hilfe:Wortart\']').parent().text();
                 word.wordclass = $wordclass;
 
                 //Audio
-                var $explanationList = $('p[title=\'Sinn und Bezeichnetes (Semantik)\']').next().children();
+                var $audioList = $('a[title=\'Hilfe:Hörbeispiele\']').nextAll();
 
-                for (i = 0, length = $explanationList.length; i < length; i++) {
-                    var explanation = $($explanationList[i]).text();
-                    word.explanations.push(explanation);
+                for (i = 0, length = $audioList.length; i < length; i++) {
+                    //console.log($($audioList[i]).attr('title'));
+                    if( $($audioList[i])[0].name === "a"){
+                        word.audio.push({link:"https"+$($audioList[i]).attr('href'),info:"https://de.wiktionary.org"+$($audioList[i]).next('sup').children().attr('href')});
+                        //console.log($($audioList[i]).next('sup').children());
+                    }
                 }
+
+
                 //Explantation
                 var $explanationList = $('p[title=\'Sinn und Bezeichnetes (Semantik)\']').next().children();
 
@@ -128,14 +143,15 @@ function parse2(data) {
                     var explanation = $($explanationList[i]).text();
                     word.explanations.push(explanation);
                 }
-                //Synonyms
 
+                //Synonyms
                 var $synonymsList = $('p[title=\'bedeutungsgleich gebrauchte Wörter\']').next().children();
 
                 for (i = 0, length = $synonymsList.length; i < length; i++) {
                     var synonym = $($synonymsList[i]).text();
                     word.synonym.push(synonym);
                 }
+
                 //Hyperonyms
                 var $hyperonymList = $('p[title=\'Hyperonyme\']').next().children();
 
@@ -173,8 +189,6 @@ function parse2(data) {
     return word;
 };
 
-/*
-get_infos("Esel",function(err, dat){
+get_infos("Trübsal",function(err, dat){
     console.log(dat);
 });
- */
