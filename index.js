@@ -2,7 +2,7 @@ var deferred = require('deferred');
 var request = require('request');
 var cheerio = require('cheerio');
 
-var wiktionaryapi = 'https://de.wiktionary.org/w/api.php?format=json&utf8&action=query&prop=extracts&export&titles=';
+//var wiktionaryapi = 'https://de.wiktionary.org/w/api.php?format=json&utf8&action=query&prop=extracts&export&titles=';
 //var api = 'https://de.wiktionary.org/w/api.php?action=query&prop=pageimages&format=json&piprop=original&titles=';
 var imageapi = 'https://commons.wikimedia.org/w/api.php?action=query&prop=imageinfo&format=json&iiprop=url&iiurlwidth=220&titles=File:'
 
@@ -21,29 +21,29 @@ var Word = function () {
     this.error = '';
 };
 
-function get_infos(searchterm, cb) {
+module.exports = {
+    get_infos: function(searchterm, cb) {
+        scrap_wiki(searchterm).done(function (data) {
+            var word = parse(data);
 
-    scrap_wiki(searchterm).done(function (data) {
-        var word = parse2(data);
-
-        //after that we do a mediawiki API request to get the desired information on the sites first example image
-        if (word.imgname) {
-            queryimage(word.imgname).done(function (data) {
-                word.imgname = data;
-                //console.log(word);
+            //after that we do a mediawiki API request to get the desired information on the sites first example image
+            if (word.imgname) {
+                queryimage(word.imgname).done(function (data) {
+                    word.imgname = data;
+                    //console.log(word);
+                    cb(null, word);
+                }, function (error) {
+                    console.log(error);
+                });
+            }else{
                 cb(null, word);
-            }, function (error) {
-                console.log(error);
-            });
-        }else{
-            cb(null, word);
-        }
-    }, function (error) {
-        console.log(error);
-    });
-
-
+            }
+        }, function (error) {
+            console.log(error);
+        });
+    }
 }
+
 //sends a http request to the wikrionary api to get more informations about the pictures
 //gets a string for the correspnding mediawiki image name and returns a JSON object with informations
 function queryimage(imagename){
@@ -94,8 +94,7 @@ function scrap_wiki(word) {
     return def.promise;
 }
 
-
-function parse2(data) {
+function parse(data) {
     var word = new Word();
     try {
         var $ = cheerio.load(data,{
@@ -112,7 +111,6 @@ function parse2(data) {
             imagename = imagename.replace('/wiki/Datei:',"");
             word.imgname = imagename;
         }
-
 
         if ($("#noarticletext").length > 0) {
             word.valid = false;
@@ -134,7 +132,6 @@ function parse2(data) {
                         //console.log($($audioList[i]).next('sup').children());
                     }
                 }
-
 
                 //Explantation
                 var $explanationList = $('p[title=\'Sinn und Bezeichnetes (Semantik)\']').next().children();
@@ -189,6 +186,35 @@ function parse2(data) {
     return word;
 };
 
-get_infos("Trübsal",function(err, dat){
+
+//livetesting
+/*
+function get_infos(searchterm, cb) {
+
+    scrap_wiki(searchterm).done(function (data) {
+        var word = parse(data);
+
+        //after that we do a mediawiki API request to get the desired information on the sites first example image
+        if (word.imgname) {
+            queryimage(word.imgname).done(function (data) {
+                word.imgname = data;
+                //console.log(word);
+                cb(null, word);
+            }, function (error) {
+                console.log(error);
+            });
+        }else{
+            cb(null, word);
+        }
+    }, function (error) {
+        console.log(error);
+    });
+}
+
+
+
+
+get_infos("Esel",function(err, dat){
     console.log(dat);
 });
+*/
