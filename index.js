@@ -88,6 +88,7 @@ function scrap_wiki(word) {
         if (!error && response.statusCode === 200 | 404 | 304) {
             return def.resolve(body);
         } else {
+            console.log(error);
             return def.reject("Query error!");
         }
     });
@@ -126,10 +127,8 @@ function parse(data) {
                 var $audioList = $('a[title=\'Hilfe:Hörbeispiele\']').nextAll();
 
                 for (i = 0, length = $audioList.length; i < length; i++) {
-                    //console.log($($audioList[i]).attr('title'));
                     if( $($audioList[i])[0].name === "a"){
-                        word.audio.push({link:"https"+$($audioList[i]).attr('href'),info:"https://de.wiktionary.org"+$($audioList[i]).next('sup').children().attr('href')});
-                        //console.log($($audioList[i]).next('sup').children());
+                        word.audio.push({link:"https:"+$($audioList[i]).attr('href'),info:"https://de.wiktionary.org"+$($audioList[i]).next('sup').children().attr('href')});
                     }
                 }
 
@@ -188,7 +187,7 @@ function parse(data) {
 
 
 //livetesting
-/*
+
 function get_infos(searchterm, cb) {
 
     scrap_wiki(searchterm).done(function (data) {
@@ -198,7 +197,6 @@ function get_infos(searchterm, cb) {
         if (word.imgname) {
             queryimage(word.imgname).done(function (data) {
                 word.imgname = data;
-                //console.log(word);
                 cb(null, word);
             }, function (error) {
                 console.log(error);
@@ -212,8 +210,7 @@ function get_infos(searchterm, cb) {
 }
 
 
-
-
+/*
 get_infos("Esel",function(err, dat){
     console.log(dat);
 });
